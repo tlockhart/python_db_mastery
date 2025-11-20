@@ -1,5 +1,6 @@
 from typing import Optional
-from sqlalchemy.orm import Mapped, mapped_column, DECIMAL, VARCHAR
+from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy import DECIMAL, VARCHAR
 
 from lesson2_structured.database.models.base import Base, TimestampMixin, TableNameMixin, str_255, int_pk
 

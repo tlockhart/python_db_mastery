@@ -1,7 +1,8 @@
 # Step2: Table Creation
 from typing import Optional
-from sqlalchemy.orm import Mapped, mapped_column, VARCHAR
-from sqlalchemy import BIGINT
+from sqlalchemy.orm import Mapped, mapped_column
+
+from sqlalchemy import BIGINT, VARCHAR
 
 from lesson2_structured.database.models.base import Base, TimestampMixin, TableNameMixin, str_255, user_fk
 

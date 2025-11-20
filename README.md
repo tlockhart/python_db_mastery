@@ -11,9 +11,10 @@
 
 ## remove postgresql
 
-## section 1: https://gist.github.com/Latand/8b2266417ad0cef9c384768a6dc8ba1c
+## Section 1: https://gist.github.com/Latand/8b2266417ad0cef9c384768a6dc8ba1c
 ## Section 2: https://gist.github.com/Latand/5eda75a319dd4b35639a8bb9c11e0b89
-## section 3: https://gist.github.com/Latand/6c10e09d5d4582095d4ebe2e0d113578
+## Section 3: https://gist.github.com/Latand/6c10e09d5d4582095d4ebe2e0d113578
+## Section 4: https://gist.github.com/corruptmane/665353988960d16fc0b71572ba2b00dc
 
 ## Start Docker:
 docker start postgresql
