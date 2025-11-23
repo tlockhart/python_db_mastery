@@ -44,5 +44,6 @@ def create_tables(db: DbConfig, echo=False):
 def get_session(echo=False):
     db = DbConfig()
     engine = create_engine_sync(db, echo=echo)
+    # session will not expire after commit
     Session = sessionmaker(bind=engine, expire_on_commit=False)
     return Session
