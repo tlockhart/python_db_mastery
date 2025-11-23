@@ -1,20 +1,25 @@
-from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
+# setup_sync.py
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
 from sqlalchemy import URL
-from database.models import Base
-from database import orders, products, users, order_products
+from .database.models.base import Base
+from environs import Env
+
+env = Env()
+env.read_env('.env')
 
 class DbConfig:
-    # def __init__(self, username: str, password: str, host: str, port: int, database: str):
-    def __init__(self, username: str, password: str, host: str, port: int, database: str):
-        self.username = "postgres"
-        self.password = "testpassword"
-        self.host = "127.0.0.1"
+    def __init__(self):
+        self.username = env.str("POSTGRES_USER")
+        self.password = env.str("POSTGRES_PASSWORD")
+        self.host = env.str("DATABASE_HOST")
         self.port = 5432
-        self.database = "postgres"
-    
+        self.database = env.str("POSTGRES_DB")
+
     def construct_sqlalchemy_url(self) -> URL:
+        # Use sychronous driver
         return URL.create(
-            drivername="postgresql+asyncpg",
+            drivername="postgresql+psycopg2",
             username=self.username,
             password=self.password,
             host=self.host,
@@ -22,32 +27,22 @@ class DbConfig:
             database=self.database,
         )
 
-def create_engine(db: DbConfig, echo=False):
-    engine = create_async_engine(
-        db.construct_sqlalchemy_url(),
-        query_cache_size=1200,
-        pool_size=20,
-        max_overflow=200,
-        future=True,
+def create_engine_sync(db: DbConfig, echo=False):
+    return create_engine(
+        db.construct_sqlalchemy_url(), 
         echo=echo,
+        pool_size=200,       # number of persistent connections
+        max_overflow=0,      # extra connections beyond pool_size
+        pool_pre_ping=True   # check connections are alive
     )
-    return engine
 
-# One-time setup function to create database schema
-async def create_tables(db: DbConfig, echo=False):
-    """Create all database tables - run once during setup"""
-    engine = create_engine(db, echo=echo)
-    
-    async with engine.begin() as conn:
-        # Create_all: only creates tables that don't already exist
-        await conn.run_sync(Base.metadata.create_all)
-    
-    await engine.dispose()
+def create_tables(db: DbConfig, echo=False):
+    engine = create_engine_sync(db, echo=echo)
+    Base.metadata.create_all(engine)
+    engine.dispose()
 
-# Creates session pool to be used by multiple users concurrently
-# for ongoing database operations (Max 220)
-async def create_session_pool(db: DbConfig, echo=False):
-    """Create session pool for runtime database operations"""
-    engine = create_engine(db, echo=echo)
-    session_pool = async_sessionmaker(bind=engine, expire_on_commit=False)
-    return session_pool
+def get_session(echo=False):
+    db = DbConfig()
+    engine = create_engine_sync(db, echo=echo)
+    Session = sessionmaker(bind=engine, expire_on_commit=False)
+    return Session

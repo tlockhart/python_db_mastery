@@ -1,6 +1,6 @@
 ## virtual environment: pip install virtualenv
 ## python -m virtualenv venv
-## activaute venv: source venv/bin/activate
+## activate venv: source venv/bin/activate
 ## pip install psycopg2-binary
 ## pip install asyncpg sqlalchemy~=2.0
 
