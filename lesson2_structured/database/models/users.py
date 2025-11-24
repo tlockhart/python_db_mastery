@@ -5,7 +5,9 @@ from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy import BIGINT, VARCHAR
 
 from lesson2_structured.database.models.base import Base, TimestampMixin, TableNameMixin, str_255, user_fk
-from .orders import Order
+
+# Don't import order in users, since we use an alias
+# from .orders import Order
 
 from sqlalchemy.orm import relationship
 

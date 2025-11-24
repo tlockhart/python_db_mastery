@@ -12,7 +12,7 @@ from sqlalchemy import and_, or_, select
 # from sqlalchemy import insert
 from sqlalchemy.dialects.postgresql import insert
 from lesson2_structured.setup import get_session
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, aliased
 
 # ----- Docker/Postgres Startup -----
 def start_postgres():
@@ -208,23 +208,67 @@ def seed_fake_data(repo: Repo):
                 quantity=fake.pyint()
             )
 
+    # Inner Joins:
+    # get all users who were invited by a referrer (reffered_id)
+    def select_all_invited_users(self):
+        # Create Alliased Table
+        ParentUser = aliased(User)
+        ReferralUser = aliased(User)
+        
+        # Inner Join = Select User who have a reffered_id
+        # Full Outer Join Definiton: Returns all users from both tables, wheter or not there is a match on referred_id.
+        # To Change stmt to Outer Join use "outerjoin" instead
+        stmt = (
+            select(ParentUser.full_name.label("parent_name"),
+                   ReferralUser.full_name.label("referral_name")
+            ).join(
+                ReferralUser, ReferralUser.referred_id == ParentUser.telegram_id 
+            )
+        )
+        result = self.session.execute(stmt)
+        return result.all()
+    
+    def select_all_invited_users2(self):
+        # Create Alliased Table
+        ParentUser = aliased(User)
+        ReferralUser = aliased(User)
+        
+        # Inner Join = Select User who have a reffered_id
+        # Full Outer Join Definiton: Returns all users from both tables, wheter or not there is a match on referred_id.
+        # To Change stmt to Outer Join use "outerjoin" instead
+        stmt = (
+            select(ParentUser.full_name.label("parent_name"),
+                   ReferralUser.full_name.label("referral_name")
+            ).outerjoin(
+                ReferralUser, ReferralUser.referred_id == ParentUser.telegram_id 
+            ).where(
+                ReferralUser.telegram_id.isnot(None),
+                ParentUser.referred_id.isnot(None)
+            )
+        )
+        result = self.session.execute(stmt)
+        return result.all()
+    
+    
 # ----- Main Function -----
 def main():
+    # Create Session
     Session = get_session()
     session = Session()
     repo = Repo(session)
-    seed_fake_data(repo)
-
+           
 #################################
-
+    # CALL METHODS HERE:
+    #####################
+    
     # insert user
-    repo.add_user(
-        telegram_id=1,
-        full_name="John Doe",
-        language_code="en",
-        user_name="johnny",
-        referred_id=None
-    )
+    # repo.add_user(
+    #     telegram_id=1,
+    #     full_name="John Doe",
+    #     language_code="en",
+    #     user_name="johnny",
+    #     referred_id=None
+    # )
     
     # get user by id
     # user = repo.get_user_by_id(1)
@@ -234,8 +278,16 @@ def main():
     # for user in users:
     #     print(f"User: {user.telegram_id}: {user.full_name}")
         
-    language = repo.get_user_language(1)
-    print(f"User language: {language}")
+    # language = repo.get_user_language(1)
+    # print(f"User language: {language}")
+    
+    # One time data load
+    # seed_fake_data(repo)
+    
+    # Return all users with a referred_id, using inner join
+    # Inner Join: Only takes the columns that each table has in common.
+    for row in repo.select_all_invited_users():
+        print(f"Parent: {row.parent_name}, Referral: {row.referral_name}")
 
 # ----- Run everything -----
 if __name__ == "__main__":
