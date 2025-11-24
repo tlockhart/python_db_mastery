@@ -8,10 +8,12 @@ from lesson2_structured.database.models.users import User
 from lesson2_structured.database.models.orders import Order
 from lesson2_structured.database.models.products import Product
 from lesson2_structured.database.models.order_products import OrderProduct
-from sqlalchemy import and_, or_, select
+from sqlalchemy import and_, func, or_, select
 # from sqlalchemy import insert
 from sqlalchemy.dialects.postgresql import insert
-from lesson2_structured.setup import get_session
+
+from lesson2_structured.setup import DbConfig, drop_tables, create_tables, get_session
+
 from sqlalchemy.orm import Session, aliased
 
 # ----- Docker/Postgres Startup -----
@@ -57,26 +59,25 @@ class Repo:
         # self.session.commit()
         
         # insert if not exists, or update if exists
-        stmt = select(User).from_statement(
-            insert(User).values(
+        stmt = insert(User).values(
                 telegram_id=telegram_id,
                 full_name=full_name,
                 user_name=user_name,
                 language_code=language_code,
                 referred_id=referred_id
-            ).returning(
-                User
             ).on_conflict_do_update(
                 index_elements=[User.telegram_id],
                 set_= {
                     "full_name": full_name,
                     "user_name": user_name
                 }
+            ).returning(
+                User
             )
-        )
-        result = self.session.scalars(stmt).first()
+        
+        result = self.session.execute(stmt).scalar_one()
         print(f"User: {result.full_name}")
-        self.session.execute(stmt)
+        self.session.commit()
         return result
         
     def get_user_by_id(self, telegram_id: int) -> User | None:
@@ -90,23 +91,26 @@ class Repo:
         stmt = select(
             User
             ).where(
-                and_(
-                    User.user_name == "johnny",
-                ),
+                # and_(
+                #     User.user_name == "johnny",
+                # ),
                 or_(
                     User.language_code == "en",
-                    User.language_code == "uk"
+                    User.language_code == "uk",
+                    User.language_code == "fr"
                 ),
-                User.user_name.ilike("%john%")
-            ).group_by(
-                User.telegram_id
-           ).order_by(
+                # User.user_name.ilike("%john%")
+            ).order_by(
                 User.created_at.desc()
             ).limit(
                 10
-            ).having(
-                User.telegram_id > 0
             )
+        #     .group_by(
+        #         User.telegram_id
+        #    )
+            # .having(
+            #     User.telegram_id > 0
+            # )
         result = self.session.execute(stmt) 
         # return the actual values not the tuple
         return result.scalars().all()
@@ -162,6 +166,83 @@ class Repo:
             # self.session.commit()
             return existing
         
+    # Join User and Order tables on User.orders
+    def get_all_user_orders(self, telegram_id: int):
+        stmt = (
+            select(Product, Order, User, OrderProduct)
+            .join(User.orders)).join(
+                Order.products
+            ).join(
+                Product
+            ).where(
+                User.telegram_id == telegram_id
+            )
+        result = self.session.execute(stmt)
+        # Note: Don't use scalars when joining multiple tables with mult labels
+        """
+        scalars() is designed to extract a single ORM-mapped entity or column 
+        from each row of the result. When your SELECT returns multiple entities 
+from sqlalchemy import func
+        (like Order and User together), each row is a tuple (Order, User), not 
+        a single scalar object.
+        •	If you call scalars() here, SQLAlchemy will try to treat each row as
+            a single object. It gets confused because each row is a tuple, not a
+            single mapped instance.
+        •	Using .all() returns the full list of tuples, so you can access both
+            sides of the join:
+        """
+        return result.all()
+    
+    # Count the number of unique orders
+    def get_total_number_of_orders(self, telegram_id: int):
+        stmt = (
+            select(func.count(
+                Order.order_id
+            )).where(
+                Order.user_id == telegram_id
+            )
+        )
+        # shorthand without execute
+        result = self.session.scalar(stmt)
+        return result
+        
+        
+    # Count the number of orders for all users
+    def get_total_number_of_orders_all_users(self):
+        stmt = (
+            select(func.count(
+                Order.order_id
+            ).label('quantity'),
+                User.full_name
+            ).join(
+                User
+            ).group_by(User.telegram_id)
+        )
+        # shorthand without execute
+        result = self.session.execute(stmt)
+        return result
+    
+    # Sum up the number or products
+    def get_total_number_of_products(self):
+        stmt = (
+            select(func.sum(
+                OrderProduct.quantity
+            ).label('quantity'),
+                User.full_name
+            ).join(
+                Order,
+                Order.order_id == OrderProduct.order_id
+            ).join(
+                User
+            ).group_by(
+                User.telegram_id
+            ).having(func.sum(OrderProduct.quantity) > 50000)
+        )
+        # shorthand without execute
+        result = self.session.execute(stmt)
+        return result
+    
+    
 # Seed the data:
 def seed_fake_data(repo: Repo):
     Faker.seed(0)
@@ -179,7 +260,7 @@ def seed_fake_data(repo: Repo):
             telegram_id=fake.unique.random_int(min=1000, max=9999),
             full_name=fake.name(),
             user_name=fake.user_name(),
-            language_code=fake.language_code(),
+            language_code=random.choice(["en", "uk", "fr"]),
             referred_id=referred_id
         )
         users.append(user)
@@ -249,7 +330,29 @@ def seed_fake_data(repo: Repo):
         result = self.session.execute(stmt)
         return result.all()
     
+def reset_database():
+    db = DbConfig()
+
+    # Drop all tables
+    print("Dropping all tables...")
+    drop_tables(db, echo=True)
+
+    # Recreate tables
+    print("Creating tables...")
+    create_tables(db, echo=True)
+
+    # Create a session and repo
+    Session = get_session(echo=True)
+    session = Session()
+    repo = Repo(session)
+
+    # Reseed database
+    print("Seeding fake data...")
+    seed_fake_data(repo)
+
+    print("Database reset and reseeded successfully!")
     
+
 # ----- Main Function -----
 def main():
     # Create Session
@@ -257,7 +360,7 @@ def main():
     session = Session()
     repo = Repo(session)
            
-#################################
+    #################################
     # CALL METHODS HERE:
     #####################
     
@@ -286,9 +389,53 @@ def main():
     
     # Return all users with a referred_id, using inner join
     # Inner Join: Only takes the columns that each table has in common.
-    for row in repo.select_all_invited_users():
-        print(f"Parent: {row.parent_name}, Referral: {row.referral_name}")
-
+    # for row in repo.select_all_invited_users():
+    #     print(f"Parent: {row.parent_name}, Referral: {row.referral_name}")
+    
+    # drop, recreate, and reseed database:
+    # reset_database()
+    
+    # Super Advanced ORM Joins:
+    ############################
+    # Ineffective: Find the orders a user has created:
+    """ 
+    Note: Order can reference elements in users, 
+    and products through the OrderProducts association
+    INEFFECTIVE: Because it doesn't actually join tables
+    """
+    # for user in repo.get_all_users():
+    #     print(f"User: {user.full_name} ({user.telegram_id})")
+    #     for order in user.orders:
+    #         print(f"  Order ID: {order.order_id}, Created At: {order.created_at}")
+    #         for product in order.products:
+    #             product = product.product
+    #             print(f"    Product: {product.title}, Price: {product.price}")  
+    
+    # Efficient Approach: Use a join to get the orders and products
+    """
+    Note: Order can reference elements in users,
+    and products through the OrderProducts association
+    """
+    # user_orders = repo.get_all_user_orders(telegram_id=1418)
+    # for row in user_orders:
+    #     print(f"#{row.Product.product_id}, Product: {row.Product.title} (x {row.OrderProduct.quantity}), Order ID: {row.Order.order_id}, User: {row.User.full_name}")
+    
+    # Aggregated Queries: COUNT, SUM, AVG, MIN, MAX
+    # Get total number of orders:
+    # num_of_orders = repo.get_total_number_of_orders(telegram_id=1418)
+    # print(f"Total number of orders: {num_of_orders}")
+    
+    # Print all user and their number or orders:
+    # num_of_orders = repo.get_total_number_of_orders_all_users()
+    # for quantity, full_name in num_of_orders:
+    #     print(f"Total number of orders: {quantity} by {full_name}")
+    
+    # Print the sum of all orders:
+    sum_of_orders = repo.get_total_number_of_products()
+    for quantity, full_name in sum_of_orders:
+        print(f"Sum of all products by user: {quantity} by {full_name}")
+    
+    
 # ----- Run everything -----
 if __name__ == "__main__":
     start_postgres()

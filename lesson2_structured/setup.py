@@ -35,6 +35,11 @@ def create_engine_sync(db: DbConfig, echo=False):
         max_overflow=0,      # extra connections beyond pool_size
         pool_pre_ping=True   # check connections are alive
     )
+    
+def drop_tables(db: DbConfig, echo=False):
+    engine = create_engine_sync(db, echo=echo)
+    # Drop all tables
+    Base.metadata.drop_all(bind=engine)
 
 def create_tables(db: DbConfig, echo=False):
     engine = create_engine_sync(db, echo=echo)
